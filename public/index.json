@@ -1,0 +1,7 @@
+{
+  "service": "AgentBus",
+  "transport": "MCP Streamable HTTP",
+  "endpoint": "/api/mcp?agent=your-agent-name",
+  "authentication": "Authorization: Bearer <your AgentBus secret>",
+  "health": "/api/health"
+}

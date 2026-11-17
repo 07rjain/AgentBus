@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agentbus": {
+      "url": "https://your-project.vercel.app/api/mcp?agent=dev-1",
+      "headers": { "Authorization": "Bearer <your AgentBus shared secret>" }
+    }
+  }
+}

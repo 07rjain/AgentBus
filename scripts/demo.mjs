@@ -1,31 +1,43 @@
-// Protocol demonstration using two real stdio MCP clients, not autonomous AIs.
+// Protocol demonstration using real stdio or HTTP MCP clients, not autonomous AIs.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 
 const suffix = randomUUID().slice(0, 8);
 const contextId = `demo-${suffix}`;
 const clients = [];
 async function connect(agent) {
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [new URL("../dist/src/index.js", import.meta.url).pathname],
-    env: {
-      ...Object.fromEntries(
-        Object.entries(process.env).filter(([, value]) => value !== undefined),
-      ),
-      AGENTBUS_AGENT: agent,
-    },
-    stderr: "pipe",
-  });
+  const remote = process.env.AGENTBUS_MCP_URL;
+  const url = remote ? new URL(remote) : undefined;
+  url?.searchParams.set("agent", agent);
+  const transport = url
+    ? new StreamableHTTPClientTransport(url, {
+        requestInit: {
+          headers: { Authorization: `Bearer ${process.env.AGENTBUS_SECRET}` },
+        },
+      })
+    : new StdioClientTransport({
+        command: process.execPath,
+        args: [new URL("../dist/src/index.js", import.meta.url).pathname],
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(
+              ([, value]) => value !== undefined,
+            ),
+          ),
+          AGENTBUS_AGENT: agent,
+        },
+        stderr: "pipe",
+      });
   const client = new Client(
     { name: "agentbus-demo", version: "0.1.0" },
     { capabilities: {} },
   );
   clients.push({ client, transport });
-  transport.stderr?.on("data", () => {});
+  if ("stderr" in transport) transport.stderr?.on("data", () => {});
   await client.connect(transport);
   return client;
 }
@@ -99,8 +111,12 @@ try {
       } else nextResolve?.();
     },
   );
-  await beta.subscribeResource({ uri: "agentbus://inbox" });
-  await bounded(initial, "Initial resource notification");
+  const subscriptions =
+    beta.getServerCapabilities()?.resources?.subscribe === true;
+  if (subscriptions) {
+    await beta.subscribeResource({ uri: "agentbus://inbox" });
+    await bounded(initial, "Initial resource notification");
+  }
   const live = new Promise((resolve) => {
     nextResolve = resolve;
   });
@@ -110,7 +126,7 @@ try {
     contextId,
     text: "Live question while beta's listener is running",
   });
-  await bounded(live, "Live resource notification");
+  if (subscriptions) await bounded(live, "Live resource notification");
   const delivered = await waiting;
   assert.equal(delivered.timedOut, false);
   assert.equal(delivered.deliveries[0].message._id, liveMessage.messageId);
@@ -120,13 +136,16 @@ try {
     liveMessage.messageId,
   );
   await call(beta, "inbox_ack", { deliveryIds: [delivered.deliveries[0]._id] });
-  await beta.unsubscribeResource({ uri: "agentbus://inbox" });
+  if (subscriptions)
+    await beta.unsubscribeResource({ uri: "agentbus://inbox" });
   assert.equal(
     (await call(beta, "inbox_wait", { timeoutMs: 100 })).timedOut,
     true,
   );
   console.log(
-    "PASS: Convex push → MCP resource notification, inbox wait, resource read, and timeout",
+    subscriptions
+      ? "PASS: Convex push → MCP resource notification, inbox wait, resource read, and timeout"
+      : "PASS: HTTP MCP inbox wait, resource read, and timeout (no persistent subscription advertised)",
   );
 
   const reply = await call(beta, "message_send", {

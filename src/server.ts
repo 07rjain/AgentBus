@@ -25,11 +25,18 @@ const taskStates = [
   "canceled",
 ] as const;
 
-export function createMcpServer(bus: BusClient) {
+export function createMcpServer(
+  bus: BusClient,
+  options: { subscriptions?: boolean } = {},
+) {
+  const subscriptions = options.subscriptions ?? true;
   const server = new Server(
     { name: "agentbus-remote", version: "0.1.0" },
     {
-      capabilities: { tools: {}, resources: { subscribe: true } },
+      capabilities: {
+        tools: {},
+        resources: subscriptions ? { subscribe: true } : {},
+      },
       instructions: `You are ${bus.agent} on AgentBus. All coordination with peers must use AgentBus. Read inbox inputs between work steps, reply with the same contextId and replyTo, and acknowledge delivery IDs only after handling them. inbox_wait waits for pending input when you are idle. Resource update notifications do not themselves insert messages into your conversation. Basic tasks do not enforce manager approval gates.`,
     },
   );
@@ -186,12 +193,14 @@ export function createMcpServer(bus: BusClient) {
       .finally(() => pendingNotifications.delete(operation));
     pendingNotifications.add(operation);
   }
-  const unsubscribe = bus.onInboxChanged(notify, () => {
-    // Avoid printing credentials contained in SDK error arguments.
-    process.stderr.write(
-      "AgentBus inbox subscription failed; check deployment connectivity and credentials.\n",
-    );
-  });
+  const unsubscribe = subscriptions
+    ? bus.onInboxChanged(notify, () => {
+        // Avoid printing credentials contained in SDK error arguments.
+        process.stderr.write(
+          "AgentBus inbox subscription failed; check deployment connectivity and credentials.\n",
+        );
+      })
+    : () => {};
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [...tools.values()].map((tool) => tool.definition),
   }));
@@ -240,18 +249,20 @@ export function createMcpServer(bus: BusClient) {
       throw new Error(bus.publicError(error));
     }
   });
-  server.setRequestHandler(SubscribeRequestSchema, async (request) => {
-    if (request.params.uri !== INBOX_URI) throw new Error("Unknown resource");
-    subscribed = true;
-    // Notify once after subscribe so an existing backlog is not overlooked.
-    queueMicrotask(notify);
-    return {};
-  });
-  server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
-    if (request.params.uri !== INBOX_URI) throw new Error("Unknown resource");
-    subscribed = false;
-    return {};
-  });
+  if (subscriptions)
+    server.setRequestHandler(SubscribeRequestSchema, async (request) => {
+      if (request.params.uri !== INBOX_URI) throw new Error("Unknown resource");
+      subscribed = true;
+      // Notify once after subscribe so an existing backlog is not overlooked.
+      queueMicrotask(notify);
+      return {};
+    });
+  if (subscriptions)
+    server.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+      if (request.params.uri !== INBOX_URI) throw new Error("Unknown resource");
+      subscribed = false;
+      return {};
+    });
   return {
     server,
     stop: async () => {

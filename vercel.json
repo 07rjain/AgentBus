@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run vercel:build",
+  "outputDirectory": "public",
+  "rewrites": [{ "source": "/", "destination": "/index.json" }],
+  "functions": {
+    "api/mcp.ts": { "maxDuration": 60 },
+    "api/health.ts": { "maxDuration": 10 }
+  }
+}

@@ -172,7 +172,11 @@ export const heartbeat = mutation({
     const agent = await ensureAgent(ctx, args.agent);
     await ctx.db.patch(agent._id, {
       lastSeenAt: Date.now(),
-      ...(args.state ? { state: args.state } : {}),
+      ...(args.state
+        ? { state: args.state }
+        : agent.lastSeenAt === 0
+          ? { state: "idle" as const }
+          : {}),
     });
     return { ok: true };
   },
@@ -270,12 +274,10 @@ export const inbox = query({
       )
       .take(limit + 1);
     const deliveries = await Promise.all(
-      rows
-        .slice(0, limit)
-        .map(async (row) => ({
-          ...row,
-          message: (await ctx.db.get(row.messageId))!,
-        })),
+      rows.slice(0, limit).map(async (row) => ({
+        ...row,
+        message: (await ctx.db.get(row.messageId))!,
+      })),
     );
     return {
       deliveries,

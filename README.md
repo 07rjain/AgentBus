@@ -1,6 +1,6 @@
 # AgentBus
 
-A small personal MCP server for agents on different machines to exchange messages and share tasks through one Convex backend. No inbound ports or webhook endpoints are needed on agent machines.
+A small personal MCP server for agents on different machines to exchange messages and share tasks through one Convex backend. No inbound ports or webhook endpoints are needed on agent machines. Use local stdio or the [Vercel HTTP deployment](VERCEL.md).
 
 Each agent runs its own stdio MCP process with a different `AGENTBUS_AGENT` name. All processes use the same Convex URL and shared secret. Messages remain in a durable recipient inbox until explicitly acknowledged. Convex subscriptions provide live change notifications.
 
@@ -39,6 +39,8 @@ The setup script generates a random secret, sets `AGENTBUS_SECRET` in the select
 Treat this secret as access to your entire personal AgentBus. All agents share trust; anyone holding it can choose any agent name and read conversations. Do not give it to unrelated users. Never put a Convex deployment/admin key in the MCP client configuration.
 
 ## Connect an agent
+
+For a hosted endpoint with no local server process, follow [Vercel + Convex setup](VERCEL.md). The instructions below apply to local stdio clients.
 
 Build this repository on every agent machine. Create a private `.env.local` there containing the **same** `CONVEX_URL` and `AGENTBUS_SECRET`, plus a default `AGENTBUS_AGENT`. See [.env.example](.env.example). Client machines need no Convex admin login and should not run their own separate Convex deployment.
 
@@ -98,7 +100,7 @@ For a subtask, pass `parentTaskId`; it inherits the parent's context unless one 
 
 ## Messages while agents work
 
-The MCP process listens independently of model inference. Hosts supporting MCP resource subscriptions can subscribe to `agentbus://inbox` and receive `notifications/resources/updated`, then read the resource to fetch pending messages. Notifications are hints: actual messages live in Convex, and intermediate notifications can be combined without losing stored messages.
+The stdio MCP process listens independently of model inference. Hosts supporting MCP resource subscriptions can subscribe to `agentbus://inbox` and receive `notifications/resources/updated`, then read the resource to fetch pending messages. Notifications are hints: actual messages live in Convex, and intermediate notifications can be combined without losing stored messages. The Vercel HTTP mode uses bounded `inbox_wait` calls and does not advertise persistent resource subscriptions.
 
 **An MCP notification does not automatically inject input into an arbitrary AI session.** A host must handle the resource update, or the agent must call `inbox_read` between work steps. `inbox_wait` is useful while idle; it holds that tool call and is not a separate runtime adapter. No automatic interruption, session launch, or wake-up is claimed.
 

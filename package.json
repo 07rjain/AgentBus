@@ -19,7 +19,9 @@
     "test": "vitest run",
     "check": "npm run typecheck && npm test && python3 scripts/validate_docs.py",
     "setup": "node scripts/setup-secret.mjs",
-    "demo": "node --env-file-if-exists=.env.local scripts/demo.mjs"
+    "demo": "node --env-file-if-exists=.env.local scripts/demo.mjs",
+    "vercel:build": "node scripts/vercel-build.mjs",
+    "demo:http": "node --env-file-if-exists=.env.local scripts/smoke-http.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

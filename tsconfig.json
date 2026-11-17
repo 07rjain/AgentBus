@@ -12,6 +12,6 @@
     "sourceMap": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "shared/**/*.ts", "convex/**/*.ts"],
+  "include": ["src/**/*.ts", "api/**/*.ts", "convex/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

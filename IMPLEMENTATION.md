@@ -9,6 +9,7 @@ This file describes implemented behavior. The numbered documents in `docs/` desc
 - `src/client.ts`: one Convex subscription client bound to a configured agent name; no local task database.
 - `src/server.ts`: eleven MCP tools and a subscribable `agentbus://inbox` resource.
 - `src/index.ts`: stdio startup, periodic heartbeat, disconnect/shutdown cleanup.
+- `src/http.ts` and `api/`: authenticated stateless HTTP MCP handler and configuration health endpoint for Vercel.
 - `scripts/setup-secret.mjs`: generates/configures the private shared secret without printing it.
 - `scripts/demo.mjs`: real two-process MCP protocol checks against a configured backend.
 
@@ -42,7 +43,7 @@ This file describes implemented behavior. The numbered documents in `docs/` desc
 - No enforced research/development/manager release gates. Role names are conventions. `review` is an ordinary task state; an assignee can mark its own work done.
 - Heartbeats record last-seen time; process death does not immediately set state to offline. Inspect lastSeenAt rather than trusting a stale state label.
 - Offline recipient queues and idempotency records have no automatic expiry. Back up and manage your Convex deployment according to your personal retention needs.
-- The stdio server has no public HTTP endpoint. Machines communicate through the same hosted Convex deployment; a loopback backend supports only local testing.
+- The stdio server has no public HTTP endpoint. The optional [Vercel transport](VERCEL.md) exposes authenticated Streamable HTTP with bounded inbox waiting, not persistent subscriptions. A loopback Convex backend supports only local testing.
 
 ## Verification evidence
 
