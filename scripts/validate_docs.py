@@ -9,7 +9,8 @@ from uuid import UUID
 
 ROOT = Path(__file__).resolve().parents[1]
 errors = []
-markdown = sorted(ROOT.rglob('*.md'))
+# Validate our documents, not installed dependencies or generated local state.
+markdown = sorted([*ROOT.glob('*.md'), *(ROOT / 'docs').rglob('*.md')])
 link_count = 0
 for source in markdown:
     for target in re.findall(r'\[[^\]]*\]\(([^)]+)\)', source.read_text()):

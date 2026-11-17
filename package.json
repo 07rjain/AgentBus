@@ -1,0 +1,36 @@
+{
+  "name": "agentbus-remote",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A personal Convex-backed MCP server for agents on different machines",
+  "engines": {
+    "node": ">=22.9.0"
+  },
+  "bin": {
+    "agentbus-remote": "dist/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node --env-file-if-exists=.env.local dist/src/index.js",
+    "dev": "node --env-file-if-exists=.env.local --import tsx src/index.ts",
+    "convex:dev": "convex dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && python3 scripts/validate_docs.py",
+    "setup": "node scripts/setup-secret.mjs",
+    "demo": "node --env-file-if-exists=.env.local scripts/demo.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "convex": "^1.50.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "convex-test": "^0.0.71",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.1.0"
+  }
+}

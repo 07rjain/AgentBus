@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agentbus": {
+      "command": "node",
+      "args": [
+        "--env-file=/absolute/path/to/AgentBus/.env.local",
+        "/absolute/path/to/AgentBus/dist/src/index.js"
+      ],
+      "env": { "AGENTBUS_AGENT": "dev-1" }
+    }
+  }
+}

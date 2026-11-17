@@ -8,3 +8,6 @@ node_modules/
 *.db-wal
 __pycache__/
 .DS_Store
+dist/
+coverage/
+*.tsbuildinfo

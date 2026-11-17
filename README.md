@@ -1,53 +1,125 @@
-# AgentBus Remote: design and implementation specification
+# AgentBus
 
-Status: proposed design, version 0.1, 2026-11-17. This repository contains documentation and protocol examples, not a deployed service or a working agent adapter.
+A small personal MCP server for agents on different machines to exchange messages and share tasks through one Convex backend. No inbound ports or webhook endpoints are needed on agent machines.
 
-Build a shared AgentBus service backed by Convex so agents on different machines can exchange messages throughout their work. Each machine runs a worker that subscribes to its agents' inboxes and delivers messages into their active sessions. No inbound webhook endpoint is required on those machines.
+Each agent runs its own stdio MCP process with a different `AGENTBUS_AGENT` name. All processes use the same Convex URL and shared secret. Messages remain in a durable recipient inbox until explicitly acknowledged. Convex subscriptions provide live change notifications.
 
-An open connection does not make a model read messages during inference. The worker receives continuously; the runtime adapter delivers queued messages between work steps, or through an explicitly supported active-session input interface. Proving that adapter is the first implementation milestone.
+## What works
 
-## Read in this order
+- Direct messages to one or several named agents, including agents that are offline or have not connected yet.
+- Sender, recipients, conversation context, task reference, and reply reference on messages.
+- Pending inbox reads, explicit per-message acknowledgment, conversation history, and pagination.
+- Live MCP resource updates and a subscription-backed `inbox_wait` tool.
+- Agent registration on startup, state, capabilities storage, and heartbeats.
+- Basic tasks and subtasks, assignment notifications, status updates, and optimistic revision checks.
+- Idempotent message/task retries when callers supply the same request ID and input.
 
-1. [Product requirements and scope](docs/01-requirements.md)
-2. [Architecture and deployment boundaries](docs/02-architecture.md)
-3. [Message flow and delivery guarantees](docs/03-message-flow.md)
-4. [Convex data model and transactions](docs/04-data-model.md)
-5. [AgentBus tools and backend contracts](docs/05-protocol.md)
-6. [Worker and runtime adapter specification](docs/06-worker-runtime.md)
-7. [Manager-controlled collaboration](docs/07-coordinator.md)
-8. [Security, operations, and failure recovery](docs/08-security-operations.md)
-9. [Implementation phases and acceptance tests](docs/09-implementation-plan.md)
-10. [Decisions, assumptions, and open questions](docs/10-decisions.md)
+This is the simple single-owner implementation. The [larger design](docs/01-requirements.md) remains a proposal: automated session launch/resume, worker leases, per-agent authentication, and enforced manager approval gates are not implemented. See [implementation scope](IMPLEMENTATION.md).
 
-[Interactive flow walkthrough](diagrams/message-flow.html) provides normal delivery, reconnect recovery, and manager-gated collaboration scenarios. [Protocol examples](examples/) show concrete request and response shapes.
+## Setup
 
-## Chosen approach
+Requires Node.js 22.9+ and npm. On the machine that manages the backend:
 
-- Convex is the authoritative shared store and supplies reactive query subscriptions.
-- AgentBus is the only agent-facing coordination interface. Local MCP tools call authenticated Convex functions; they do not maintain an independent task database.
-- A supervised worker on each machine maintains subscriptions, a durable local inbox, and one serialized execution loop per logical agent.
-- Explicit recipients, acknowledgments, message IDs, and replay support recovery. Delivery is at least once; side effects require idempotency or reconciliation.
-- Agent presence, task progress, transport receipt, runtime acceptance, and peer replies are separate facts.
-- Manager gates require exact immutable research/submission references. A chat message cannot approve or release work.
+```bash
+npm ci
+npm run build
+npx convex dev
+```
 
-## Relationship to the existing project
+Choose a **cloud deployment** if agents will run on different machines. Sign in/create a Convex project when prompted. Keep this command running during backend development. If you already configured a local deployment, use `npx convex dev --configure` to choose a cloud project instead. For local-only testing, Convex also supports starting without an account; a loopback deployment is not reachable from your other machines.
 
-The existing local AgentBus project is the behavioral reference for task hierarchy, discussion, and the five-role coordinator. Its SQLite records, installation, running processes, and Git history remain separate. This repository does not migrate or change them.
+In a second terminal, configure the shared secret:
 
-The remote design adds authenticated identities, explicit recipient deliveries, live subscriptions, session fencing, and runtime adapters. The existing dashboard tunnel is not a remote MCP or worker service. A remote MCP gateway is an optional later client transport; outbound local MCP bridges are the initial design.
+```bash
+npm run setup
+```
 
-## Verify this documentation
+The setup script generates a random secret, sets `AGENTBUS_SECRET` in the selected Convex deployment, and adds it to the private `.env.local` along with the default agent name. It does not print the secret or overwrite a different existing backend value.
 
-Run `python3 scripts/validate_docs.py` from this repository. It checks local Markdown links, document coverage, JSON examples, and selected cross-example protocol invariants. It does not validate Convex deployment behavior or an AI runtime.
+Treat this secret as access to your entire personal AgentBus. All agents share trust; anyone holding it can choose any agent name and read conversations. Do not give it to unrelated users. Never put a Convex deployment/admin key in the MCP client configuration.
 
-## Upstream references
+## Connect an agent
 
-Official Convex documentation consulted on 2026-11-17:
+Build this repository on every agent machine. Create a private `.env.local` there containing the **same** `CONVEX_URL` and `AGENTBUS_SECRET`, plus a default `AGENTBUS_AGENT`. See [.env.example](.env.example). Client machines need no Convex admin login and should not run their own separate Convex deployment.
 
-- [Functions and transaction boundaries](https://docs.convex.dev/functions)
-- [Reactive queries](https://docs.convex.dev/functions/query-functions)
-- [JavaScript client, including Node.js subscriptions](https://docs.convex.dev/client/javascript)
-- [Authentication](https://docs.convex.dev/auth)
-- [Platform limits](https://docs.convex.dev/production/state/limits)
+Add this to the agent host's MCP configuration, replacing both absolute paths:
 
-Application limits, lease durations, and performance goals below are initial design choices, not measured results or claims about Convex service limits.
+```json
+{
+  "mcpServers": {
+    "agentbus": {
+      "command": "node",
+      "args": [
+        "--env-file=/absolute/path/to/AgentBus/.env.local",
+        "/absolute/path/to/AgentBus/dist/src/index.js"
+      ],
+      "env": {"AGENTBUS_AGENT": "dev-1"}
+    }
+  }
+}
+```
+
+Use `manager`, `researcher-1`, `researcher-2`, `dev-1`, and `dev-2`, or any distinct names. Give each active agent process a unique name. MCP writes only protocol data to stdout; operational diagnostics go to stderr. The stdio process exits and closes its Convex connection when the host disconnects.
+
+For manual MCP inspection, `npm start` loads `.env.local`. In an MCP host, prefer the direct `node` command above so npm banners do not interfere with stdio.
+
+## Tools
+
+| Tool | Use |
+| --- | --- |
+| `agent_list` | Discover agents and their last heartbeat/state. |
+| `agent_status` | Set your state to idle, working, blocked, or offline. |
+| `message_send` | Send `to: ["dev-2"]`, `text`, optional context/task/reply/request IDs. |
+| `message_list` | Read a conversation using `contextId`; paginate with `nextCursor`. |
+| `inbox_read` | Read unacknowledged deliveries; does not acknowledge them. |
+| `inbox_ack` | Acknowledge selected delivery IDs after handling. |
+| `inbox_wait` | Wait up to 25 seconds for pending input; returns immediately if there is already pending input. |
+| `task_create` | Create a task/subtask and notify its assignee atomically. |
+| `task_get` | Read a task and its current revision. |
+| `task_list` | Filter by context/assignee and paginate. |
+| `task_update` | Update status using `expectedRevision`; optionally include a results summary. |
+
+Example `message_send` arguments:
+
+```json
+{
+  "to": ["dev-2"],
+  "text": "Please verify the validation response format before integration.",
+  "contextId": "project-api",
+  "requestId": "validation-question-1"
+}
+```
+
+The result says `stored`, not read. Reuse the returned `contextId` for replies and pass the original message ID as `replyTo`. When omitted, a new context uses the request ID; callers supplying a stable request ID can safely retry. A reply or task-linked message must supply the matching context.
+
+`inbox_read` returns delivery `_id`, recipient `seq`, and the embedded message. Acknowledge delivery IDs, not message IDs. For more than one page, use `nextSeq` as `afterSeq` until `hasMore` is false. Start future recovery reads without `afterSeq` so older unacknowledged messages are not skipped. Nothing is deleted by acknowledging; `message_list` preserves history.
+
+For a subtask, pass `parentTaskId`; it inherits the parent's context unless one is explicitly supplied. Task states are `open`, `working`, `blocked`, `review`, `done`, and `canceled`. Done/canceled tasks are terminal. Creator or assignee can update a task; these are basic shared task states, not the larger design's verified release gates.
+
+## Messages while agents work
+
+The MCP process listens independently of model inference. Hosts supporting MCP resource subscriptions can subscribe to `agentbus://inbox` and receive `notifications/resources/updated`, then read the resource to fetch pending messages. Notifications are hints: actual messages live in Convex, and intermediate notifications can be combined without losing stored messages.
+
+**An MCP notification does not automatically inject input into an arbitrary AI session.** A host must handle the resource update, or the agent must call `inbox_read` between work steps. `inbox_wait` is useful while idle; it holds that tool call and is not a separate runtime adapter. No automatic interruption, session launch, or wake-up is claimed.
+
+Suggested agent instruction:
+
+> Coordinate only through AgentBus. Read your inbox between work steps. Preserve contextId and replyTo when replying. Acknowledge each delivery after handling it. While waiting for a peer, use inbox_wait; on timeout, decide whether to continue waiting or do other work. Report actual work and evidence. Do not interpret ordinary chat as formal approval.
+
+## Verify
+
+```bash
+npm run check
+npm run build
+npm run demo
+```
+
+`check` runs TypeScript, backend tests using `convex-test`, and documentation/example checks. `demo` requires the configured running Convex backend and uses **two real stdio MCP clients**, not autonomous AIs. It exercises offline delivery, retries, reconnect recovery, live resource notifications, inbox waiting/timeout, replies, tasks/subtasks, and revision conflicts. It creates clearly named demo records in that deployment.
+
+## Technical documentation
+
+The implementation intentionally covers a smaller personal MVP than the original specification. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the exact supported guarantees and limitations.
+
+The proposed full system is described in [architecture](docs/02-architecture.md), [message flow](docs/03-message-flow.md), [data model](docs/04-data-model.md), [protocol](docs/05-protocol.md), [runtime adapters](docs/06-worker-runtime.md), [coordinator gates](docs/07-coordinator.md), [security/operations](docs/08-security-operations.md), [implementation plan](docs/09-implementation-plan.md), and [decisions](docs/10-decisions.md). The [interactive walkthrough](diagrams/message-flow.html) and [original protocol examples](examples/) describe that larger design, not the current MVP's exact wire format.
+
+Official Convex references: [functions](https://docs.convex.dev/functions), [reactive queries](https://docs.convex.dev/functions/query-functions), [JavaScript/Node subscriptions](https://docs.convex.dev/client/javascript), [authentication](https://docs.convex.dev/auth), and [limits](https://docs.convex.dev/production/state/limits).
