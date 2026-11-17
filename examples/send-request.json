@@ -1,0 +1,10 @@
+{
+  "protocolVersion": "agentbus.remote.v1",
+  "requestId": "754a2320-1072-4e63-987a-42023c028fb1",
+  "contextId": "context_api_project",
+  "taskId": "task_api",
+  "recipientAgentIds": ["agent_dev_1"],
+  "kind": "question",
+  "body": {"text": "What response format should the UI expect for validation errors?"},
+  "correlationId": "conversation_validation_errors"
+}

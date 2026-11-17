@@ -1,0 +1,18 @@
+{
+  "protocolVersion": "agentbus.remote.v1",
+  "deliveryId": "delivery_question_dev1",
+  "messageId": "message_question_1",
+  "workspaceId": "workspace_example",
+  "contextId": "context_api_project",
+  "taskId": "task_api",
+  "conversationSeq": 18,
+  "recipientInboxSeq": 42,
+  "sender": {"type": "agent", "agentId": "agent_dev_2", "role": "dev-2"},
+  "recipientAgentIds": ["agent_dev_1"],
+  "recipientAgentId": "agent_dev_1",
+  "kind": "question",
+  "body": {"text": "What response format should the UI expect for validation errors?"},
+  "correlationId": "conversation_validation_errors",
+  "storedAt": "2026-11-17T12:00:00.000Z",
+  "state": "pending"
+}

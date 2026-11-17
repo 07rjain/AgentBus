@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgentBus Remote message-flow walkthrough</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--foreground, #202733); font: 15px/1.55 var(--font-sans, system-ui, sans-serif); }
+    button { font: inherit; }
+    .intro { margin: 0 0 14px; color: var(--muted-foreground, #637084); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .tabs button { border: 1px solid var(--border, #cbd5df); border-radius: var(--radius, 8px); background: var(--secondary, #edf1f6); color: var(--foreground, #202733); padding: 8px 12px; cursor: pointer; }
+    .tabs button[aria-pressed="true"] { background: var(--primary, #315cc4); color: var(--primary-foreground, white); border-color: var(--primary, #315cc4); }
+    button:focus-visible { outline: 3px solid var(--ring, #718fe8); outline-offset: 3px; }
+    .route { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 8px; margin: 0 0 18px; }
+    .node { background: var(--card, #f3f5f8); border-radius: var(--radius, 8px); padding: 16px; min-width: 0; }
+    .node strong { display: block; font-size: 14px; }
+    .node span { color: var(--muted-foreground, #637084); font-size: 12px; }
+    .arrow { color: var(--chart-1, #315cc4); font-size: 22px; }
+    h2 { margin: 0 0 4px; font-size: 19px; letter-spacing: -.02em; }
+    .description { margin: 0 0 14px; color: var(--muted-foreground, #637084); }
+    ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    li { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border, #d8dfe8); }
+    .number { color: var(--chart-1, #315cc4); font: 600 13px var(--font-mono, monospace); padding-top: 3px; }
+    li strong { display: block; font-size: 14px; }
+    li p { margin: 3px 0 0; color: var(--muted-foreground, #637084); font-size: 13px; }
+    .note { margin-top: 16px; padding: 16px; border-radius: var(--radius, 8px); background: var(--card, #f3f5f8); font-size: 13px; }
+    .note strong { color: var(--chart-2, #15736b); }
+    @media (max-width: 460px) { .route { grid-template-columns: 1fr; } .arrow { display: none; } .node { padding: 10px 14px; } }
+  </style>
+</head>
+<body>
+  <p class="intro">Proposed architecture · Convex stores and signals; local workers deliver into active agent sessions.</p>
+  <nav class="tabs" aria-label="Message flow scenario">
+    <button type="button" data-flow="normal" aria-pressed="true">While agents work</button>
+    <button type="button" data-flow="recovery" aria-pressed="false">After a disconnect</button>
+    <button type="button" data-flow="manager" aria-pressed="false">Manager gates</button>
+  </nav>
+  <div class="route" aria-label="All workers connect outbound to the shared backend">
+    <div class="node"><strong>Machine A</strong><span>Agent + local worker + MCP</span></div>
+    <span class="arrow" aria-hidden="true">↔</span>
+    <div class="node"><strong>Convex / AgentBus</strong><span>Messages · inboxes · approvals</span></div>
+    <span class="arrow" aria-hidden="true">↔</span>
+    <div class="node"><strong>Machine B</strong><span>Agent + local worker + MCP</span></div>
+  </div>
+  <section aria-live="polite" aria-atomic="true">
+    <h2 id="heading"></h2>
+    <p id="description" class="description"></p>
+    <ol id="steps"></ol>
+    <div id="note" class="note"></div>
+  </section>
+  <script>
+    const flows = {
+      normal: {
+        heading: 'A question arrives during a test run',
+        description: 'The listener stays connected while the model and its tools do their work.',
+        steps: [
+          ['Dev-2 sends through AgentBus', 'Its MCP tool supplies a stable request ID, task, explicit recipient, and question.'],
+          ['Convex commits message + delivery', 'One transaction stores the message, creates dev-1’s inbox entry, and advances its inbox head.'],
+          ['Dev-1’s subscription observes the head change', 'The local worker fetches every missing entry and persists it before acknowledging receipt.'],
+          ['The running test command continues', 'The message is queued locally. Receipt does not claim that the model has read it.'],
+          ['The runtime accepts the envelope at a supported boundary', 'The adapter records which session received it; the agent answers through AgentBus and continues working.']
+        ],
+        note: '<strong>Separate evidence:</strong> stored → worker-received → runtime-accepted → handled. A reply and a task approval are separate records.'
+      },
+      recovery: {
+        heading: 'Messages survive an offline worker',
+        description: 'Reactive notifications provide speed; the durable inbox provides recovery.',
+        steps: [
+          ['Machine B disconnects', 'AgentBus continues saving authorized messages and pending recipient deliveries.'],
+          ['The worker pauses new execution before lease expiry', 'Existing shell side effects may continue; takeover requires reconciliation.'],
+          ['A worker reconnects with a fenced session', 'An intact journal resumes its cursor. A replacement worker loads all central nonterminal deliveries.'],
+          ['Catch-up drains through the current inbox head', 'Callbacks may combine updates; sequence-paginated reads still retrieve every retained delivery.'],
+          ['Runtime history resolves prior dispatches', 'Deduplicate known inputs; show unknown outcomes rather than blindly repeating actions.']
+        ],
+        note: '<strong>At least once:</strong> IDs prevent duplicate journal entries. Exactly-once model execution or external side effects are not promised.'
+      },
+      manager: {
+        heading: 'Five roles, explicit release gates',
+        description: 'Assignments, discussion, review, corrections, and results all pass through AgentBus.',
+        steps: [
+          ['Manager assigns two independent investigations', 'Researcher-1 and researcher-2 return reports with inspectable evidence.'],
+          ['Manager requests cross-review', 'Both researchers agree to the exact current report pair and shared contract.'],
+          ['Manager releases developer assignments', 'Dev-1 and dev-2 coordinate implementation and exchange commit-addressed artifacts.'],
+          ['Developers verify; manager reviews', 'Corrections to either developer invalidate stale acceptance and require fresh verification.'],
+          ['Manager commits final release', 'Only current passing peer reviews and manager approvals permit the final user result.']
+        ],
+        note: '<strong>Enforced by transactions:</strong> prose cannot approve work. Role, revision, and exact evidence references are checked before any gate changes.'
+      }
+    };
+    function showFlow(key) {
+      const flow = flows[key];
+      document.getElementById('heading').textContent = flow.heading;
+      document.getElementById('description').textContent = flow.description;
+      const list = document.getElementById('steps');
+      list.replaceChildren();
+      flow.steps.forEach(([title, detail], i) => {
+        const item = document.createElement('li');
+        const number = document.createElement('span'); number.className = 'number'; number.textContent = String(i + 1).padStart(2, '0');
+        const content = document.createElement('div');
+        const heading = document.createElement('strong'); heading.textContent = title;
+        const body = document.createElement('p'); body.textContent = detail;
+        content.append(heading, body); item.append(number, content); list.append(item);
+      });
+      document.getElementById('note').innerHTML = flow.note;
+      document.querySelectorAll('[data-flow]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.flow === key)));
+    }
+    document.querySelectorAll('[data-flow]').forEach(button => button.addEventListener('click', () => showFlow(button.dataset.flow)));
+    showFlow('normal');
+  </script>
+</body>
+</html>

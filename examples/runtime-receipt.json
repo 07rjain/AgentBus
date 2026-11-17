@@ -1,0 +1,11 @@
+{
+  "protocolVersion": "agentbus.remote.v1",
+  "dispatchId": "dispatch_dev1_0042",
+  "agentId": "agent_dev_1",
+  "sessionGeneration": 3,
+  "runtimeSessionRef": "runtime_session_dev1",
+  "deliveryIds": ["delivery_question_dev1"],
+  "phase": "runtime_accepted",
+  "receiptRef": "runtime_input_receipt_42",
+  "acceptedAt": "2026-11-17T12:00:03.000Z"
+}

@@ -1,0 +1,11 @@
+{
+  "protocolVersion": "agentbus.remote.v1",
+  "requestId": "3c044b69-0d0d-4d7f-a899-0fdbe55cef48",
+  "contextId": "context_api_project",
+  "taskId": "task_api",
+  "recipientAgentIds": ["agent_dev_2"],
+  "kind": "reply",
+  "body": {"text": "Use an errors array with field and message. I will publish the exact schema before integration."},
+  "replyTo": "message_question_1",
+  "correlationId": "conversation_validation_errors"
+}
