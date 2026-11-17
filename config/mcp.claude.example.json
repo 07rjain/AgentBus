@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "agentbus_remote": {
+      "type": "http",
+      "url": "https://agent-bus-eight.vercel.app/api/mcp?agent=dev-1",
+      "headers": {"Authorization": "Bearer ${AGENTBUS_SECRET}"}
+    }
+  }
+}

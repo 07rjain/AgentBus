@@ -28,6 +28,8 @@ With a Git-connected Vercel project, pushing to the production branch triggers a
 
 ## Connect remote agents
 
+For the live deployment URL, host-specific configuration, and a two-agent connection test, use the [agent setup guide](AGENT_SETUP.md).
+
 Use [the HTTP MCP configuration example](config/mcp.http.example.json), adjusting the URL, agent name, and header:
 
 ```json

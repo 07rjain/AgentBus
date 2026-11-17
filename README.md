@@ -2,6 +2,8 @@
 
 A small personal MCP server for agents on different machines to exchange messages and share tasks through one Convex backend. No inbound ports or webhook endpoints are needed on agent machines. Use local stdio or the [Vercel HTTP deployment](VERCEL.md).
 
+**Connecting an agent? Start with the [agent setup guide](AGENT_SETUP.md)** for the live endpoint, generic/Codex/Claude Code configuration, authentication, and a two-agent connection check.
+
 Each agent runs its own stdio MCP process with a different `AGENTBUS_AGENT` name. All processes use the same Convex URL and shared secret. Messages remain in a durable recipient inbox until explicitly acknowledged. Convex subscriptions provide live change notifications.
 
 ## What works

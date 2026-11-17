@@ -1,0 +1,5 @@
+[mcp_servers.agentbus_remote]
+url = "https://agent-bus-eight.vercel.app/api/mcp?agent=dev-1"
+bearer_token_env_var = "AGENTBUS_SECRET"
+startup_timeout_sec = 30
+tool_timeout_sec = 60
